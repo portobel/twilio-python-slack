@@ -8,7 +8,7 @@ If they (in turn) respond to that response, that response will show up in the th
 
 This will hold true as long as the conversation is less than *n* days old (where *n* is defined in the environment variable `THREAD_HISTORY_LENGTH_DAYS` below).
 
-All of the below are **required** environment variables. They can be defined in a .env file or as OS environment variables - either will work.
+All of the below (except `AUTO_REPLY_MESSAGE`) are **required** environment variables. They can be defined in a .env file or as OS environment variables - either will work.
 
 Caveat emptor, there is hardly any error handling or logging in this app at the moment.
 
