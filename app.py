@@ -27,7 +27,7 @@ twilio_client = Client()
 
 
 # Uncomment next line to log request contents
-# @app.before_request
+@app.before_request
 def log_request_info():
     app.logger.debug('Headers: %s', request.headers)
     app.logger.debug('Body: %s', request.get_data())
