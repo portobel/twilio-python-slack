@@ -20,10 +20,11 @@ channel_id = os.getenv("SLACK_CHANNEL_ID")
 icon_emoji = os.getenv("SLACK_ICON_EMOJI")
 slack_token = os.getenv("SLACK_BOT_TOKEN")
 two_way_enabled = os.getenv("TWO_WAY_COMMUNICATION_ENABLED").lower() in ['true', '1', 't', 'y', 'yes']
+auto_reply_message = os.getenv("AUTO_REPLY_MESSAGE")
+
 slack_client = slack.WebClient(slack_token)
 twilio_client = Client()
 
-auto_reply_message = os.getenv("AUTO_REPLY_MESSAGE")
 
 # Uncomment next line to log request contents
 # @app.before_request
@@ -33,11 +34,15 @@ def log_request_info():
 
 
 def find_parent_message(from_number: str):
-    oldest = datetime.datetime.today() - datetime.timedelta(days=thread_history_length_days)
-    response = slack_client.conversations_history(channel=channel_id, limit=500, oldest=oldest.timestamp())
-    for m in response['messages']:
-        if from_number in m['text']:
-            return m['ts']
+    try:
+        oldest = datetime.datetime.today() - datetime.timedelta(days=thread_history_length_days)
+        response = slack_client.conversations_history(channel=channel_id, limit=500, oldest=oldest.timestamp())
+        for message in response['messages']:
+            if from_number in message['text']:
+                return message['ts']
+    except Exception as e:
+        app.logger.error('Error while trying to find corresponding thread in Slack for ' + from_number + ': ' + str(e))
+
     return None
 
 
@@ -48,12 +53,15 @@ def send_incoming_message():
     message = f"Message from {from_number}: {sms_message}"
 
     ts = find_parent_message(from_number)
-    slack_message = slack_client.chat_postMessage(
+    slack_client.chat_postMessage(
         channel=message_channel, text=message, icon_emoji=icon_emoji, thread_ts=ts)
 
-    if not ts:
-        messages = twilio_client.messages.create(
-            to=from_number, from_=os.getenv("TWILIO_NUMBER"), body=auto_reply_message)
+    if auto_reply_message and not ts:
+        try:
+            twilio_client.messages.create(
+                to=from_number, from_=os.getenv("TWILIO_NUMBER"), body=auto_reply_message)
+        except Exception as e:
+            app.logger.error('Error in sending autoresponse for ' + from_number + ' via Twilio: ' + str(e))
 
     response = MessagingResponse()
     return Response(response.to_xml(), mimetype="text/html"), 200
@@ -62,7 +70,7 @@ def send_incoming_message():
 @app.route('/incoming/slack', methods=['POST'])
 def send_incoming_slack():
     if not two_way_enabled:
-        return
+        return Response(), 200
 
     attributes = request.get_json()
     if 'challenge' in attributes:
@@ -73,7 +81,7 @@ def send_incoming_slack():
         if to_number:
             automated = f"Message from {to_number}:"
             if not slack_message.startswith(automated):
-                messages = twilio_client.messages.create(
+                twilio_client.messages.create(
                     to=to_number, from_=os.getenv("TWILIO_NUMBER"), body=slack_message)
         return Response(), 200
     return Response(), 200
